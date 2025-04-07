@@ -1,123 +1,108 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# ======= Estilo da Página =======
-st.set_page_config(page_title="Dashboard", layout="wide")
+st.set_page_config(page_title="Dashboard de Pedidos", layout="wide")
 
+# Estilo personalizado
 st.markdown("""
     <style>
-        body {
-            color: white;
-            background-color: #0f0f11;
-        }
-        .sidebar .sidebar-content {
-            background-color: #1c1c1f;
-        }
-        .sidebar-title {
-            font-weight: bold;
-            font-size: 20px;
-            color: #f1c40f;
-            padding-bottom: 10px;
-        }
-        .nav-button {
-            display: block;
-            width: 100%;
-            padding: 0.75rem 1rem;
-            margin: 0.5rem 0;
-            background-color: #2c2f33;
-            border-radius: 10px;
-            border: 1px solid #444;
-            color: white;
-            text-align: center;
-            text-decoration: none;
-            font-weight: 500;
-        }
-        .nav-button:hover {
-            background-color: #555;
-            color: #fff;
-        }
-        .nav-button-active {
-            background-color: #1e90ff;
-            color: white;
-            font-weight: bold;
-        }
-        .nav-button:visited {
-            color: white;
-        }
+    /* Remove aparência de link */
+    .sidebar-button a {
+        text-decoration: none !important;
+        color: white !important;
+        display: block;
+        width: 100%;
+        text-align: center;
+    }
+
+    /* Estilo dos botões do menu */
+    .sidebar-button {
+        background-color: #1f1f1f;
+        padding: 0.75rem;
+        border-radius: 12px;
+        margin-bottom: 10px;
+        font-weight: bold;
+        transition: 0.3s;
+        border: 1px solid #444;
+    }
+
+    .sidebar-button:hover {
+        background-color: #444;
+    }
+
+    .sidebar-button.active {
+        background-color: #3399FF;
+        color: white !important;
+        border: none;
+    }
+
+    .sidebar-button.active a {
+        color: white !important;
+    }
+
+    .css-1d391kg {  /* Texto no sidebar */
+        color: white !important;
+    }
+
+    .css-1v0mbdj {  /* Fundo geral */
+        background-color: #121212;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# ======= Função para Navegação =======
-def menu_lateral():
-    st.sidebar.markdown('<div class="sidebar-title">📂 Navegação</div>', unsafe_allow_html=True)
-    aba = st.query_params.get("aba", ["Carteira de Pedido"])[0]
+# Navegação
+abas = {
+    "Carteira de Pedido": "📦",
+    "Contrato": "📄",
+    "Estoque": "📊"
+}
 
-    def botao_nav(nome):
-        classe = "nav-button"
-        if aba == nome:
-            classe += " nav-button-active"
-        link = f"?aba={nome}"
-        st.sidebar.markdown(f'<a href="{link}" class="{classe}">{nome}</a>', unsafe_allow_html=True)
+# Controle via query params
+query_params = st.query_params
+aba_atual = query_params.get("page", "Carteira de Pedido")
 
-    botoes = ["Carteira de Pedido", "Contrato", "Estoque"]
-    for nome in botoes:
-        botao_nav(nome)
-    return aba
+with st.sidebar:
+    st.markdown("### 📁 <span style='color:gold;'>Navegação</span>", unsafe_allow_html=True)
+    for aba in abas:
+        classe = "sidebar-button"
+        if aba == aba_atual:
+            classe += " active"
+        st.markdown(
+            f'<div class="{classe}"><a href="?page={aba}">{abas[aba]} {aba}</a></div>',
+            unsafe_allow_html=True
+        )
 
-# ======= Página Principal =======
-aba = menu_lateral()
+# Conteúdo da página
+st.title(f"{abas[aba_atual]} {aba_atual}")
 
-# ======= Conteúdo por Página =======
-if aba == "Carteira de Pedido":
-    st.title("📦 Carteira de Pedido")
-
-    arquivo = st.file_uploader("📤 Envie sua planilha Excel", type=["xlsx"])
+if aba_atual == "Carteira de Pedido":
+    arquivo = st.file_uploader("📂 Envie sua planilha Excel", type=["xlsx"])
     if arquivo:
-        try:
-            df = pd.read_excel(arquivo, skiprows=11)
-            df = df.dropna(subset=["Purchase Order", "Volume", "MARS Material SKU"])
+        df = pd.read_excel(arquivo, skiprows=11)
 
-            # Normalizar o campo de tipo de produto
-            df["Tipo de Produto"] = df["MARS Material SKU"].astype(str)
+        tipos_produto = df["TIPO DE PRODUTO"].dropna().unique()
+        tipo_selecionado = st.selectbox("Filtrar por tipo de produto", tipos_produto)
 
-            tipos = df["Tipo de Produto"].unique().tolist()
-            tipo_selecionado = st.selectbox("📌 Selecione o tipo de produto:", tipos)
+        df_filtrado = df[df["TIPO DE PRODUTO"] == tipo_selecionado]
 
-            df_filtrado = df[df["Tipo de Produto"] == tipo_selecionado]
+        qtd_pedidos = df_filtrado.shape[0]
+        volume_total = df_filtrado["VL TOTAL"].sum()
 
-            col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2)
+        col1.metric("Quantidade de Pedidos", qtd_pedidos)
+        fig = px.pie(
+            values=[volume_total, 0.01],
+            names=[f"{tipo_selecionado}", ""],
+            hole=0.5,
+            color_discrete_sequence=["#3399FF", "#e0e0e0"]
+        )
+        fig.update_layout(showlegend=False)
+        col2.plotly_chart(fig, use_container_width=True)
 
-            with col1:
-                total_pedidos = df_filtrado["Purchase Order"].nunique()
-                st.metric("Total de Pedidos", total_pedidos)
+elif aba_atual == "Contrato":
+    st.write("🔧 Página de Contrato em construção...")
 
-            with col2:
-                # Converter volume para float
-                df_filtrado["Volume"] = (
-                    df_filtrado["Volume"].astype(str)
-                    .str.replace(".", "")
-                    .str.replace(",", ".")
-                    .astype(float)
-                )
-
-                fig = px.pie(
-                    df_filtrado,
-                    names="Purchase Order",
-                    values="Volume",
-                    title="Distribuição de Volume por Pedido",
-                    hole=0.5,
-                    color_discrete_sequence=px.colors.qualitative.Set2
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-        except Exception as e:
-            st.error(f"Erro ao processar arquivo: {e}")
-
-elif aba == "Contrato":
-    st.title("📑 Contrato")
-    st.info("Página de contratos em construção...")
-
-elif aba == "Estoque":
-    st.title("📦 Estoque")
-    st.info("Página de estoque em construção...")
+elif aba_atual == "Estoque":
+    st.write("📦 Página de Estoque em construção...")
